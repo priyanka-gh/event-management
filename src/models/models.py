@@ -1,4 +1,4 @@
-from mongoengine import Document, ReferenceField, StringField, ListField, DateTimeField, IntField, BooleanField, EmailField
+from mongoengine import Document,EmbeddedDocumentField,EmbeddedDocument, BooleanField, ReferenceField, StringField, ListField, DateTimeField, IntField, BooleanField, EmailField
 import datetime
 
 class User(Document):
@@ -16,13 +16,17 @@ class Participants(Document):
     participant_dob = DateTimeField(required=True)
     # participant_checked_in = IntField(default = 0)
 
+class ParticipantData(EmbeddedDocument):
+    participant_ref = ReferenceField(Participants)
+    participant_checked_in = BooleanField(default = False)
+
 class Event(Document):
     event_id = StringField()
     eventName = StringField(required=True)
     eventDesc = StringField(required=True)
     eventMinAge = IntField(required=True)
     user = ReferenceField(User, required=True)
-    participants = ListField(ReferenceField(Participants))
+    participants = ListField(EmbeddedDocumentField(ParticipantData))
     # participant_checked_in = ListField(ReferenceField(Participants))
     date_created = DateTimeField(default=datetime.datetime.utcnow)
     eventDate = DateTimeField(required=True)

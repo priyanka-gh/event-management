@@ -34,9 +34,9 @@ async def create_this_event(event_data: NewEvent, current_user: dict = Depends(g
 async def join_this_event(event_id: str, new_participant: NewParticipant):
     return join_event(event_id, new_participant)
 
-# @router.post("/check-in/{event_id}/{participant_id}")
-# async def check_in_event(event_id: str, participant_id: str):
-#     return check_in(event_id, participant_id)
+@router.post("/check-in/{event_id}/{participant_id}")
+async def check_in_event(event_id: str, participant_id: str):
+    return check_in(event_id, participant_id)
 
 @router.get("/get-event/{event_id}")
 def get_this_event(event_id :str):

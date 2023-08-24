@@ -1,10 +1,10 @@
-from src.models.models import Event, User, Participants
+from src.models.models import Event, User, Participants, ParticipantData
 import jwt
 from fastapi import Header, Depends
 from fastapi import Response, APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from src.routes.userAuth import get_current_user
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 from bson import ObjectId  
 import smtplib
@@ -22,8 +22,7 @@ gc = gspread.service_account(filename="credentials/service-account-key.json")
 sh = gc.open_by_key('1BU-VckOH-wEX-xGqgUo21f0o1MKD-I-c6LfTQWWTYtc')
 
 current_utc_time = datetime.utcnow()
-# india_time_zone = pytz.timezone('Asia/Kolkata')
-# current_utc_time = current_utc_time.replace(tzinfo=pytz.UTC).astimezone(india_time_zone)
+# current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
 
 def spreadsheet(eventName: str):
     try:
@@ -49,6 +48,7 @@ def create_event(event_data: 'event_data', current_user: 'current_user'):
             "eventName": event.eventName,
             "eventDesc": event.eventDesc,
             "eventDate": event.eventDate,
+            "participants": event.participants,
             "eventMinAge": event.eventMinAge,
             "user": {
                 "_id": user_id
@@ -59,57 +59,56 @@ def create_event(event_data: 'event_data', current_user: 'current_user'):
 
 
 def check_in(event_id: 'event_id', participant_id: 'participant_id'):
-    event = get_event(event_id=event_id)
-    participant = get_participant(participant_id=participant_id)
-    c = 0
+    event = Event.objects.get(id=event_id)
 
-    print(event)
-    print(participant)
+    event_date = event.eventDate
+    # event_date = datetime.fromtimestamp(event_date)
 
-    # current_day = current_utc_time.strftime("%Y-%M;%D")
-    # current_hour = current_utc_time.strftime("%H")
-    # # event_hour = event.eventDate.strftime("%H")
-    # print('c',current_hour,' ','e',event_hour)
-
-    # if current_utc_time>event.eventDate or participant.id not in event.participants:
-    #     return {"message": "Unable to join."}
-
-    # if current_utc_time.strftime("%Y-%M-%D") == event.eventDate.strftime("%Y-%M-%D") and  c == 0 and current_hour - current_utc_time <= 5:
-    #     participant.participant_checked_in = 1
-    #     c+1
-    #     return {"message": "Checked In"}
-    # else:
-    #     return {"message": "This User has already Checked In"}
+    time_threshold = timedelta(seconds=195170)
+    print(event_date," ", current_utc_time)
+    for participant_data in event.participants:
+        if (
+            not participant_data.participant_checked_in
+            and str(participant_data.participant_ref.id) == participant_id
+        ):
+            if event_date - current_utc_time <= time_threshold:
+                participant_data.participant_checked_in = True
+                event.save()  
+                print("Participant checked in successfully.")
+            else:
+                print("Event check-in time has passed.")
+            break
+        else:
+            print("You have already checked-in")   
 
 def join_event(event_id: str, new_participant: 'NewParticipant'):
-     
     try:
         event = Event.objects.get(id=event_id)
     except Exception as e:
         return {"message": "Event does not exist."}
 
-    if len(event.participants)>0:
+    if len(event.participants) > 0:
         for thisp in event.participants:
-            if(str(thisp.participant_email) == new_participant.participant_email):
+            if str(thisp.participant_ref.participant_email) == new_participant.participant_email:
                 return {"message": "You have already joined the event"}
                 break
 
-
-    if(current_utc_time>event.eventDate):
+    if current_utc_time > event.eventDate:
         return {"message": "This event has passed."}
     else:
         age = relativedelta(current_utc_time, new_participant.participant_dob)
-        print("age is ",age.years)
+        print("age is ", age.years)
         if age.years >= event.eventMinAge:
-            participant = Participants(participant_email=new_participant.participant_email, participant_name=new_participant.participant_name, participant_number = new_participant.participant_number, participant_dob = new_participant.participant_dob)
+            participant = Participants(participant_email=new_participant.participant_email, participant_name=new_participant.participant_name, participant_number=new_participant.participant_number, participant_dob=new_participant.participant_dob)
             participant.save()
-            event.participants.append(participant)
+            
+            participant_data = ParticipantData(participant_ref=participant)
+            event.participants.append(participant_data)
             event.save()
+
             subject = 'Participation in an event'
             message = f'You participated in this event. Your Ticket ID is {participant.id}'
             to_email = participant.participant_email
-
-            # send_email(subject, message, to_email)
 
             get_worksheet(event.eventName, participant)
             return {"message": "You have joined the event"}
@@ -142,7 +141,7 @@ def get_all_upcoming_events():
     all_events = Event.objects.all()
     events_data = []
     # current_utc_time = datetime.utcnow()
-    formatted_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
+    # formatted_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
 
     for event in all_events:
         if(current_utc_time<event.eventDate):
