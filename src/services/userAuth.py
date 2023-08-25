@@ -10,7 +10,7 @@ import json
 import os
 from dotenv import load_dotenv
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 120
 
 def email_exists(email):
     try:
@@ -53,8 +53,8 @@ def get_password_hash(password):
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl = "token")
 
-
 SECRET_KEY = "fd68bbcc397ff21d9073b18ef8d3ba6df9dc22fa68c8a827dfbeef7fc7af7f50"
+
 ALGORITHM = "HS256"
 
 def create_access_token(data: dict, expires_delta: timedelta):
@@ -62,7 +62,6 @@ def create_access_token(data: dict, expires_delta: timedelta):
     expire = datetime.utcnow() + expires_delta
     to_encode.update({"exp": expire})
     
-    # Use jwt.encode from pyjwt library
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     
     return encoded_jwt
@@ -82,7 +81,8 @@ def get_token(username:str, password:str):
         return {
             "access_token": access_token, 
             "token_type": "bearer", 
-            "user": user_data["_id"]["$oid"]
+            "user": user_data["_id"]["$oid"],
+            "message" : "Credentials Verified"
         }
     else:
         raise HTTPException(
@@ -130,3 +130,14 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except:
         raise credentials_exception
     return token_data
+
+def verify_token(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

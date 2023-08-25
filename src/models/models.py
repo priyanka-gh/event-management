@@ -31,3 +31,4 @@ class Event(Document):
     date_created = DateTimeField(default=datetime.datetime.utcnow)
     eventDate = DateTimeField(required=True)
     subsheet_id = StringField()
+    url = StringField()

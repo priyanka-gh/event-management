@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import json
 import jwt
-from src.services.userAuth import signup, get_token, get_user, email_exists, username_exists, get_password_hash, authenticate, create_access_token, get_current_user
+from src.services.userAuth import verify_token, signup, get_token, get_user, email_exists, username_exists, get_password_hash, authenticate, create_access_token, get_current_user
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -26,3 +26,7 @@ class Token(BaseModel):
 @router.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     return get_token(form_data.username, form_data.password)
+
+@router.post("/logout")
+def logout(token_data: dict = Depends(verify_token)):
+    return {"message": "Logout successful."}

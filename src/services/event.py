@@ -19,15 +19,16 @@ from dateutil.relativedelta import relativedelta
 import pytz
 gc = gspread.service_account(filename="credentials/service-account-key.json")
 
+# sh_key = os.environ.get("SH_KEY")
 sh = gc.open_by_key('1BU-VckOH-wEX-xGqgUo21f0o1MKD-I-c6LfTQWWTYtc')
 
 current_utc_time = datetime.utcnow()
-# current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
 
 def spreadsheet(eventName: str):
     try:
         worksheet_current = sh.add_worksheet(title=eventName, rows=100, cols=20)
         worksheet_current.append_row(['Participant Email',' ','Participant Name',' ','Participant Phone No',' ','Participant DOB'], table_range='A1')
+        return worksheet_current.url
 
     except Exception as e:
         return {"message ","Unable to add to the spreadsheet"}
@@ -35,51 +36,53 @@ def spreadsheet(eventName: str):
 
 def create_event(event_data: 'event_data', current_user: 'current_user'):
     user_id = current_user.userId
-
-    event = Event(eventName=event_data.eventName, eventDesc=event_data.eventDesc, user=user_id, eventDate=event_data.eventDate, eventMinAge=event_data.eventMinAge)
-    event.save()
-
-    spreadsheet(event.eventName)
-
-    return {
-        "message": "Event created",
-        "event_details": {
-            "_id": str(event.id),
-            "eventName": event.eventName,
-            "eventDesc": event.eventDesc,
-            "eventDate": event.eventDate,
-            "participants": event.participants,
-            "eventMinAge": event.eventMinAge,
-            "user": {
-                "_id": user_id
-            },
-            "date_created": event.date_created
-        }
-    }
-
+    url = spreadsheet(event_data.eventName)
+    print(type(url))
+    if isinstance(url, str): 
+        event = Event(
+            eventName=event_data.eventName,
+            eventDesc=event_data.eventDesc,
+            user=user_id,
+            eventDate=event_data.eventDate,
+            eventMinAge=event_data.eventMinAge,
+            url=url
+        )
+        event.save()
+    else:
+        return {"message": "Unable to add the spreadsheet url"}
 
 def check_in(event_id: 'event_id', participant_id: 'participant_id'):
-    event = Event.objects.get(id=event_id)
+    try:
+        event = Event.objects.get(id=event_id)
+    except Event.DoesNotExist:
+        return {"message": "Event does not exist."}
+
+    participant_data = None
+    for pd in event.participants:
+        if str(pd.participant_ref.id) == participant_id:
+            participant_data = pd
+            break
+
+    if not participant_data:
+        return {"message": "Participant not found."}
+
+    if participant_data.participant_checked_in:
+        return {"message": "You have already checked-in."}
 
     event_date = event.eventDate
-    # event_date = datetime.fromtimestamp(event_date)
+    current_time = datetime.utcnow()
 
-    time_threshold = timedelta(seconds=195170)
-    print(event_date," ", current_utc_time)
-    for participant_data in event.participants:
-        if (
-            not participant_data.participant_checked_in
-            and str(participant_data.participant_ref.id) == participant_id
-        ):
-            if event_date - current_utc_time <= time_threshold:
-                participant_data.participant_checked_in = True
-                event.save()  
-                print("Participant checked in successfully.")
-            else:
-                print("Event check-in time has passed.")
-            break
+    if current_time >= event_date:
+        time_threshold = timedelta(seconds=195170)
+        time_difference = event_date - current_time
+        if time_difference <= time_threshold:
+            participant_data.participant_checked_in = True
+            event.save()
+            return {"message": "Participant checked in successfully."}
         else:
-            print("You have already checked-in")   
+            return {"message": "Event check-in time has passed."}
+    else:
+        return {"message": "Event has not started yet."}
 
 def join_event(event_id: str, new_participant: 'NewParticipant'):
     try:
@@ -109,7 +112,7 @@ def join_event(event_id: str, new_participant: 'NewParticipant'):
             subject = 'Participation in an event'
             message = f'You participated in this event. Your Ticket ID is {participant.id}'
             to_email = participant.participant_email
-
+            send_email(subject, message, to_email)
             get_worksheet(event.eventName, participant)
             return {"message": "You have joined the event"}
         else:
@@ -149,6 +152,9 @@ def get_all_upcoming_events():
                 "event_id": str(event.id),
                 "eventName": event.eventName,
                 "eventDesc": event.eventDesc,
+                "eventDate": event.eventDate.strftime("%Y-%m-%d %H:%M:%S"),
+                "eventMinAge": event.eventMinAge,
+                "url": event.url
             }
             events_data.append(event_data)
         
@@ -167,6 +173,9 @@ def get_all_events():
             "event_id": event["_id"]["$oid"],
             "eventName": event["eventName"],
             "eventDesc": event["eventDesc"],
+            "eventDate": event["eventDate"],
+            "eventMinAge": event["eventMinAge"],
+            "url": event["url"]
         }
         events_data.append(event_data)
     return Response(content=json.dumps(events_data), media_type="application/json")   
@@ -200,8 +209,10 @@ def delete_event_main(event_id: 'event_id', current_user: 'current_user'):
 def send_email(subject, message, to_email):
     smtp_server = 'smtp.gmail.com'
     smtp_port = 587
-    sender_email = 'priyankaghansela22@gmail.com'  # Replace with your email address
-    sender_password = 'mykdbcbamvohmfxi'
+    # sender_email = 'priyankaghansela22@gmail.com'  # Replace with your email address
+    # sender_password = 'mykdbcbamvohmfxi'
+    sender_email = os.environ.get("SENDER_EMAIL")
+    sender_password =os.environ.get("SENDER_PASS")
 
     msg = MIMEMultipart()
     msg['From'] = sender_email

@@ -6,6 +6,7 @@ from mongoengine import connect, disconnect
 import os
 from dotenv import load_dotenv
 from src.services.userAuth import signup, NewUser
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
@@ -14,6 +15,18 @@ app = FastAPI()
 connect(os.environ.get("DATABASE_NAME"), host=os.environ.get("MONGODB_URL"))
 app.include_router(user_main.router)
 app.include_router(event_main.router)
+
+origins = [
+    "http://localhost:5173",  
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def admin_signup():
     try:
