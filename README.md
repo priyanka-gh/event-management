@@ -1,14 +1,12 @@
 This FastAPI-based project provides an API for managing events, participants, and user authentication. It includes features such as creating events, checking in participants and joining events
 
-Event Creation:
-
-**Endpoint: POST /create-event**
+**Event Creation:**
 Receives a request to create a new event.
 Creates a Google Sheets worksheet for the event.
 Saves event details, including the spreadsheet URL.
 Participant Joining an Event:
 
-**Endpoint: POST /join-event**
+**Participant Joining an Event:**
 Receives a request to join an event.
 Verifies participant eligibility based on age.
 Creates a new participant entry and updates the worksheet.
